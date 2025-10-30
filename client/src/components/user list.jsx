@@ -1,23 +1,17 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 
-export default function MessageList({ messages, me }) {
-  const ref = useRef();
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [messages]);
-
+export default function UserList({ users, onPrivate }) {
   return (
-    <div className="messages" ref={ref}>
-      {messages.map(m => (
-        <div key={m.id} className={"message " + (m.from === me.username ? "you" : "")}>
-          <div className="meta">
-            <strong>{m.from}</strong> <span style={{marginLeft:8}}>{new Date(m.ts).toLocaleTimeString()}</span>
-            {m.read && <span className="meta" style={{marginLeft:8}}>✓</span>}
-            {m.to && m.to !== m.room && <span className="meta" style={{marginLeft:8}}> (private)</span>}
+    <div>
+      <h3>Online</h3>
+      <div>
+        {users.map(u => (
+          <div key={u.id} className="user">
+            <span>{u.username}</span>
+            <button style={{float:"right"}} onClick={()=>onPrivate(u)}>PM</button>
           </div>
-          <div>{m.text}</div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
