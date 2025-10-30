@@ -1,0 +1,44 @@
+import React, { useEffect, useState } from "react";
+
+export default function RoomList({ socket, currentRoom, setRoom }) {
+  const [rooms, setRooms] = useState([]);
+  const [newRoom, setNewRoom] = useState("");
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.emit("getRooms");
+    socket.on("rooms", (r) => setRooms(r));
+    return () => socket.off("rooms");
+  }, [socket]);
+
+  function createRoom(e) {
+    e.preventDefault();
+    if (!newRoom.trim()) return;
+    socket.emit("createRoom", newRoom.trim(), (ack) => {
+      setNewRoom("");
+      if (ack.ok) setRoom(ack.room);
+    });
+  }
+
+  return (
+    <div>
+      <h3>Rooms</h3>
+      <div>
+        {rooms.map((r) => (
+          <div
+            key={r}
+            className={"room " + (r === currentRoom ? "active" : "")}
+            onClick={() => setRoom(r)}
+          >
+            {r}
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={createRoom} style={{marginTop:12}}>
+        <input value={newRoom} onChange={(e)=>setNewRoom(e.target.value)} placeholder="new room name" style={{width:"100%",padding:8}}/>
+        <button style={{marginTop:6,width:"100%",padding:8}}>Create Room</button>
+      </form>
+    </div>
+  );
+}
