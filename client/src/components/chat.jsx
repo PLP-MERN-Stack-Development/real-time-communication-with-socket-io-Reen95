@@ -1,42 +1,91 @@
-import React, { useState, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
+import RoomList from "./RoomList";
+import MessageList from "./MessageList";
+import MessageInput from "./MessageInput";
+import UserList from "./UserList";
+import { UserContext } from "../context/UserContext";
 
-export default function MessageInput({ socket, room, to }) {
-  const [text, setText] = useState("");
-  const [typing, setTyping] = useState(false);
+export default function Chat({ socket }) {
+  const { user } = useContext(UserContext);
+  const [room, setRoom] = useState("general");
+  const [messages, setMessages] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [typingInfo, setTypingInfo] = useState([]);
+  const [privateTarget, setPrivateTarget] = useState(null);
 
   useEffect(() => {
     if (!socket) return;
-    const tOut = setTimeout(() => {
-      if (typing) {
-        socket.emit("typing", { room, to, typing: false });
-        setTyping(false);
-      }
-    }, 1200);
-    return () => clearTimeout(tOut);
-  }, [text]); // resets timer while typing
+    socket.emit("joinRoom", { room });
 
-  function send(e) {
-    e?.preventDefault();
-    if (!text.trim()) return;
-    socket.emit("sendMessage", { room, text: text.trim(), to }, (ack) => {
-      setText("");
+    socket.on("messageHistory", (msgs) => {
+      setMessages(msgs);
     });
+
+    socket.on("message", (m) => {
+      setMessages(prev => [...prev, m]);
+      // browser title notification
+      if (document.hidden) document.title = `New message from ${m.from}`;
+      // emit read receipt for direct/private messages to mark read
+      if (m.to && m.to !== room && m.to === user.username) {
+        socket.emit("messageRead", m.id);
+      }
+    });
+
+    socket.on("onlineUsers", (list) => setUsers(list));
+    socket.on("typing", (info) => {
+      setTypingInfo(info);
+    });
+
+    return () => {
+      socket.off("messageHistory");
+      socket.off("message");
+      socket.off("onlineUsers");
+      socket.off("typing");
+    };
+  }, [socket, room, user]);
+
+  useEffect(() => {
+    // leave previous room when switching
+    if (!socket) return;
+    return () => {
+      socket.emit("leaveRoom", room);
+    };
+  }, [room]);
+
+  function onPrivate(targetUser) {
+    setPrivateTarget(targetUser);
+    setRoom(generatePrivateRoom(user.username, targetUser.username));
   }
 
-  function onChange(e) {
-    setText(e.target.value);
-    if (!typing) {
-      setTyping(true);
-      socket.emit("typing", { room, to, typing: true });
-    }
+  function generatePrivateRoom(a, b) {
+    return [a,b].sort().join("__");
   }
 
   return (
-    <form onSubmit={send} className="input">
-      <div style={{display:"flex"}}>
-        <input value={text} onChange={onChange} placeholder={to ? `Private to ${to.username}` : `Message #${room}`} style={{flex:1,padding:8}}/>
-        <button style={{padding:8, marginLeft:8}}>Send</button>
+    <div className="app">
+      <div className="sidebar">
+        <div className="header">
+          <div><strong>{user.username}</strong></div>
+          <div style={{fontSize:13, color:"#666"}}>Room: {room}</div>
+        </div>
+
+        <RoomList socket={socket} currentRoom={room} setRoom={(r)=>{ setPrivateTarget(null); setRoom(r); }} />
+
+        <div style={{marginTop:12}}>
+          <UserList users={users} onPrivate={onPrivate} />
+        </div>
       </div>
-    </form>
+
+      <div className="main">
+        <div className="header">
+          <strong>{privateTarget ? `Private: ${privateTarget.username}` : `Room: ${room}`}</strong>
+          {typingInfo.length>0 && <div className="typing">{typingInfo.join(", ")} typing...</div>}
+        </div>
+
+        <MessageList messages={messages} me={user} />
+
+        <MessageInput socket={socket} room={room} to={privateTarget} />
+      </div>
+    </div>
   );
 }
